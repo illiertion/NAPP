@@ -55,14 +55,19 @@ endif()
 # Default (official) repository. Point this at your own raw URL when the
 # repository is not hosted at ILLIERTION/NAPP-Repository.
 target_compile_definitions(napp-launcher PRIVATE
-    NAPP_OFFICIAL_REPOSITORY_URL="${NAPP_OFFICIAL_REPOSITORY_URL}")
+    NAPP_OFFICIAL_REPOSITORY_URL="${NAPP_OFFICIAL_REPOSITORY_URL}"
+    NAPP_VERSION_STRING="${PROJECT_VERSION}")
 napp_apply_warnings(napp-launcher)
 set_target_properties(napp-launcher PROPERTIES OUTPUT_NAME "NAPP")
 
-# Explorer icon for NAPP.exe, generated from the same PNG set as the window icon.
-if(WIN32)
-    target_sources(napp-launcher PRIVATE assets/napp.rc)
-endif()
+# Explorer icon and the File Properties version block for NAPP.exe. The icon is
+# built from the same PNG set as the window icon (scripts/pack-ico.py), and the
+# version comes from PROJECT_VERSION so it cannot drift from the build.
+napp_add_version_resource(napp-launcher
+    PRODUCT "NAPP"
+    DESCRIPTION "NAPP application launcher"
+    ORIGINAL_FILENAME "NAPP.exe"
+    EXECUTABLE)
 
 # All launcher screens are QML; Widgets only hosts the window and native dialogs.
 qt_add_resources(napp-launcher "napp_qml"

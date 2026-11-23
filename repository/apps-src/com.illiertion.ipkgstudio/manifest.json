@@ -4,14 +4,14 @@
   "app": {
     "id": "com.illiertion.ipkgstudio",
     "name": "IPKG Studio",
-    "version": "1.3.0",
-    "description": "Build .ipkg packages with your own icon, window title/size/tray settings, a chosen save folder, live readiness checklist and the SDK/API reference downloaded from the store.",
+    "version": "1.4.0",
+    "description": "Build .ipkg packages with your own app icon and window icon, window title/size/tray settings, a chosen save folder, live readiness checklist and the SDK/API reference downloaded from the store.",
     "author": "ILLIERTION",
     "license": "MIT"
   },
   "runtime": {
     "type": "chromium",
-    "minimum_version": "1.3.0"
+    "minimum_version": "1.4.0"
   },
   "sdk": {
     "minimum_version": "1.0.0"

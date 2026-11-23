@@ -65,7 +65,7 @@
 
       <div class="subhead">
         <h3 data-i18n="windowTitle">App window</h3>
-        <p data-i18n="windowHint">Title, opening size and tray icon are written into the manifest and applied by the launcher. Changing them adds the “window” permission.</p>
+        <p data-i18n="windowHint">Title, opening size, window icon and tray icon are written into the manifest and applied by the launcher. Changing them adds the “window” permission.</p>
       </div>
       <div class="grid">
         <label class="wide"><span data-i18n="fieldWindowTitle">Window title</span>
@@ -78,6 +78,17 @@
         <label><span data-i18n="fieldWindowHeight">Window height</span>
           <input id="window-height" type="number" min="360" max="2160" step="10" value="760">
         </label>
+        <div class="icon-row wide">
+          <img id="window-icon-preview" class="icon-preview" alt="">
+          <div class="icon-actions">
+            <div class="row">
+              <button type="button" id="pick-window-icon" data-i18n="chooseWindowIcon">Choose window icon…</button>
+              <button type="button" class="link" id="clear-window-icon" data-i18n="clearIcon">Remove</button>
+            </div>
+            <small class="icon-info" id="window-icon-info"></small>
+          </div>
+          <input type="file" id="window-icon-input" accept="image/png,image/jpeg,image/webp" hidden>
+        </div>
         <label class="check wide">
           <input type="checkbox" id="window-tray">
           <span data-i18n="windowTray">Keep a tray icon; closing the window leaves the app running in the notification area</span>

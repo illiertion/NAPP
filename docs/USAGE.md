@@ -143,10 +143,15 @@ Hello.ipkg
 ├── manifest.json
 ├── metadata/
 │   ├── icon.png        (실존 파일이어야 함)
-│   └── preview.png     (실존 파일이어야 함)
+│   ├── preview.png     (실존 파일이어야 함)
+│   └── window-icon.png (선택 — `window.icon` 으로 지정하면 실존해야 함)
 └── app/
     └── index.html      (entry)
 ```
+
+`metadata/icon.png`는 스토어 타일·바로 가기가 쓰고, `metadata/window-icon.png`는
+실행 중인 창(작업 표시줄 단추, Alt+Tab, 트레이)이 쓴다. 둘을 다르게 두면
+미리보기와 실제 창을 각각 꾸밀 수 있다. 자동으로 만들려면 IPKG Studio 1.4.0 이상.
 
 ### 6.2 manifest.json
 
@@ -460,7 +465,7 @@ powershell -ExecutionPolicy Bypass -File scripts\make-release.ps1
       `NAPP-Setup.exe --portable "D:\NAPP" --quiet`
   - `dist\NAPP-<버전>-portable.zip` — 압축을 풀면 `payload\NAPP.exe` 로 바로 실행
   - `dist\NAPP-<버전>\` — payload + PowerShell 설치 스크립트(수동 배포·디버깅용)
-  - payload에는 `NAPP.exe`, Qt DLL/QML 모듈, `runtime\<버전>\`(CEF 런타임, 현재 1.3.0), `docs\`, `Uninstall.ps1` 이 들어간다.
+  - payload에는 `NAPP.exe`, Qt DLL/QML 모듈, `runtime\<버전>\`(CEF 런타임, 현재 1.4.0), `docs\`, `Uninstall.ps1` 이 들어간다.
   - 런처는 시작할 때 `NAPP.exe` 옆의 `runtime\<버전>\` 을 자동 등록하므로, 새 PC에서 런타임을 수동 등록할 필요가 없다.
 - 설치 프로그램과 `dist\NAPP-<버전>\NAPP-Setup.cmd` 모두 **설치** 또는 **포터블**을 고른다.
   - 설치: `%LOCALAPPDATA%\Programs\NAPP`, 시작 메뉴 바로 가기, 선택 시 바탕 화면 바로 가기, 앱 및 기능 제거 항목, `.ipkg` 연결 (관리자 권한 불필요)
@@ -469,15 +474,35 @@ powershell -ExecutionPolicy Bypass -File scripts\make-release.ps1
 - `scripts\make-release.ps1` → `release\repository\`(GitHub raw 업로드용 트리, `docs/` 포함),
   `release\apps\`(빌드된 `.ipkg`). 설치 프로그램과 포터블 ZIP은 `dist\` 에서 GitHub 릴리스에 첨부한다.
 
+### 12.1 앱을 플랫폼 전용 앱으로 배포
+
+런처 자체와 별개로, **개별 앱**을 각 OS 가 기대하는 모습으로 포장할 수 있다.
+
+```bash
+python scripts/pack_app.py path/to/app.ipkg
+python scripts/pack_app.py app.ipkg --platform windows-x64 --installer
+python scripts/pack_app.py app.ipkg --platform all
+```
+
+| 플랫폼 | 결과물 |
+| --- | --- |
+| `windows-x64` | 앱 아이콘을 단 `<Name>.exe` 스텁, `.ipkg`, `install.ps1`/`uninstall.ps1`, `README.txt`. `--installer` → 단일 파일 `Setup.exe` (사용자 범위 설치 + 바로 가기 + 제거 항목) |
+| `macos-arm64` | `<Name>.app` 번들 (`Info.plist`, `AppRun`, `.icns`) |
+| `linux-x64` | `AppDir` (`AppRun`, `.desktop`, 아이콘) + `install.sh`/`uninstall.sh` |
+
+결과물은 `dist-apps/` 에 플랫폼별 폴더와 `.zip` 로 나온다. 스텁은 NAPP 을 찾아
+동봉한 `.ipkg` 를 설치하고 `NAPP --run-app <id>` 로 넘기므로, 브라우저를 동봉하지
+않아도 된다. 상세는 `README.md` 5장을 보라.
+
 ## 13. 현재 제한 사항
 
 - **CEF 샌드박스 비활성**: 프로세스는 앱별로 분리되지만 Chromium 샌드박스는 아직 켜져 있지 않다. 신뢰할 수 없는 앱을 배포하기 전에 해결해야 한다.
 - Ed25519 서명 검증 없음(SHA-256 무결성만 확인).
 - 자동 업데이트 없음(알림 + 수동 설치).
-- `window.napp` 은 읽기 전용이다. 창 제목/크기는 매니페스트 `window` 블록으로만 정할 수 있고 페이지에서 실행 중에 바꾸는 웹 API는 없다. 네이티브 대화상자는 폴더 선택만 제공한다.
+- `window.napp` 은 읽기 전용이다. 창 제목/크기/아이콘은 매니페스트 `window` 블록으로만 정할 수 있고 페이지에서 실행 중에 바꾸는 웹 API는 없다. 네이티브 대화상자는 폴더 선택만 제공한다.
 - 스토어 아이콘은 저장소 이미지를 내려받지 않고 글자 타일로 표시한다.
 - Linux 빌드·실행 미검증.
-- 공식 저장소(`ILLIERTION/NAPP-Repository`)가 아직 없어 기본 상태에서는 404가 표시된다. 정상 동작이다.
+- 공식 저장소(`ILLIERTION/NAPP-Repository`)는 `repository/` 를 그대로 올려 만든다. 아직 올리지 않았다면 기본 상태에서 404 가 표시되는데, 이는 정상 동작이다. `repository/scripts/build_repository.py` 로 인덱스를 만들고 GitHub 에 올리면 스토어가 채워진다.
 
 ---
 

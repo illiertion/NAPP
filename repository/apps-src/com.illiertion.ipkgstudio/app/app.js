@@ -56,7 +56,18 @@ let resultShown = false;
 // 창 설정은 사용자가 실제로 건드렸을 때만 매니페스트에 쓴다.
 let windowCustomized = false;
 let saveFolder = "";
-let iconObjectUrl = "";
+
+// The two package images live at fixed paths whatever file was picked, so the
+// manifest never depends on the source file name.
+// 패키지 이미지 두 개는 어떤 파일을 고르든 고정 경로에 저장한다. 매니페스트가 원본
+// 파일 이름에 좌우되지 않게 하기 위함이다.
+const APP_ICON_PATH = "metadata/icon.png";
+const WINDOW_ICON_PATH = "metadata/window-icon.png";
+
+// Preview state for the app icon and the window icon.
+// 앱 아이콘과 창 아이콘의 미리보기 상태.
+const iconPreview = { url: "" };
+const windowIconPreview = { url: "" };
 
 function resolveLanguage() {
   if (languagePreference === "ko" || languagePreference === "en") return languagePreference;
@@ -98,6 +109,10 @@ const STRINGS = {
     fieldWindowWidth: "Window width",
     fieldWindowHeight: "Window height",
     windowTray: "Keep a tray icon; closing the window leaves the app running in the notification area",
+    chooseWindowIcon: "Choose window icon…",
+    windowIconInfo: "Saved as metadata/window-icon.png",
+    windowIconNone: "No window icon yet — the launcher uses the NAPP icon.",
+    errWindowIcon: "The window icon is not readable.",
     iconTitle: "App icon",
     iconHint: "The launcher, store and shortcuts use this image. It is stored as metadata/icon.png.",
     chooseIcon: "Choose image…",
@@ -214,12 +229,16 @@ const STRINGS = {
     fieldLicense: "라이선스",
     fieldEntry: "진입점",
     windowTitle: "앱 창",
-    windowHint: "창 제목, 시작 크기, 트레이 아이콘은 매니페스트에 기록되어 런처가 적용합니다. 값을 바꾸면 “window” 권한이 켜집니다.",
+    windowHint: "창 제목, 시작 크기, 창 아이콘, 트레이 아이콘은 매니페스트에 기록되어 런처가 적용합니다. 값을 바꾸면 “window” 권한이 켜집니다.",
     fieldWindowTitle: "창 제목",
     hintWindowTitle: "비워 두면 앱 이름",
     fieldWindowWidth: "창 너비",
     fieldWindowHeight: "창 높이",
     windowTray: "트레이 아이콘 유지 — 창을 닫아도 알림 영역에서 계속 실행",
+    chooseWindowIcon: "창 아이콘 선택…",
+    windowIconInfo: "metadata/window-icon.png 로 저장됨",
+    windowIconNone: "아직 창 아이콘이 없습니다 — NAPP 기본 아이콘을 씁니다.",
+    errWindowIcon: "창 아이콘을 읽을 수 없습니다.",
     iconTitle: "앱 아이콘",
     iconHint: "런처, 스토어, 바로가기가 이 이미지를 씁니다. metadata/icon.png 로 저장됩니다.",
     chooseIcon: "이미지 선택…",
@@ -403,6 +422,7 @@ function render() {
   $("file-summary").textContent = files.size === 1 ? t("fileCountOne") : t("fileCount", { count: files.size });
   syncEntryOptions();
   refreshIconPreview();
+  refreshWindowIconPreview();
   renderChecklist();
 }
 
@@ -421,32 +441,48 @@ function syncEntryOptions() {
 }
 
 function iconBytes() {
-  return files.get("metadata/icon.png") || null;
+  return files.get(APP_ICON_PATH) || null;
 }
 
-function refreshIconPreview() {
-  if (iconObjectUrl) {
-    URL.revokeObjectURL(iconObjectUrl);
-    iconObjectUrl = "";
+// Shared preview renderer for the app icon and the window icon. Each slot keeps
+// its own object URL so switching one preview cannot leak the other.
+// 앱 아이콘과 창 아이콘에 공통으로 쓰는 미리보기 렌더러. 슬롯마다 object URL 을
+// 따로 두어 한쪽 미리보기가 다른 쪽을 해제하지 않게 한다.
+function refreshImagePreview(imageId, clearId, infoId, path, slot, emptyKey, okKey) {
+  if (slot.url) {
+    URL.revokeObjectURL(slot.url);
+    slot.url = "";
   }
-  const image = $("icon-preview");
-  const bytes = iconBytes();
+  const image = $(imageId);
+  const bytes = files.get(path) || null;
   if (bytes) {
-    iconObjectUrl = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
-    image.src = iconObjectUrl;
+    slot.url = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+    image.src = slot.url;
     image.style.visibility = "visible";
   } else {
     image.removeAttribute("src");
     image.style.visibility = "hidden";
   }
-  $("clear-icon").disabled = !bytes;
-  $("icon-info").textContent = bytes ? t("iconInfo") : t("iconNone");
+  $(clearId).disabled = !bytes;
+  $(infoId).textContent = bytes ? t(okKey) : t(emptyKey);
 }
 
-// Downscales to at most 512 px and re-encodes as PNG, because the manifest icon
-// is always metadata/icon.png no matter which image the user picked.
-// 고른 이미지가 무엇이든 매니페스트 아이콘은 metadata/icon.png 이므로 512px 이하로 줄여 PNG 로 저장한다.
-async function useIconFile(file) {
+function refreshIconPreview() {
+  refreshImagePreview("icon-preview", "clear-icon", "icon-info", APP_ICON_PATH,
+                      iconPreview, "iconNone", "iconInfo");
+}
+
+function refreshWindowIconPreview() {
+  refreshImagePreview("window-icon-preview", "clear-window-icon", "window-icon-info",
+                      WINDOW_ICON_PATH, windowIconPreview, "windowIconNone", "windowIconInfo");
+}
+
+// Downscales to at most 512 px and re-encodes as PNG. The manifest points at a
+// fixed path whatever image the user picked, so the package shape never depends
+// on the source file name.
+// 512px 이하로 줄여 PNG 로 저장한다. 어떤 이미지를 고르든 매니페스트는 고정 경로를
+// 가리키므로 패키지 모양이 원본 파일 이름에 좌우되지 않는다.
+async function useImageFile(file, path, errorKey) {
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
@@ -457,11 +493,19 @@ async function useIconFile(file) {
     if (bitmap.close) bitmap.close();
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!blob) throw new Error("png encoding failed");
-    files.set("metadata/icon.png", new Uint8Array(await blob.arrayBuffer()));
+    files.set(path, new Uint8Array(await blob.arrayBuffer()));
     render();
   } catch (error) {
-    showProblems([t("iconReadFailed")]);
+    showProblems([t(errorKey)]);
   }
+}
+
+function useIconFile(file) {
+  return useImageFile(file, APP_ICON_PATH, "iconReadFailed");
+}
+
+function useWindowIconFile(file) {
+  return useImageFile(file, WINDOW_ICON_PATH, "errWindowIcon");
 }
 
 function markWindowCustomized() {
@@ -600,6 +644,12 @@ function validate(entry, id, version, name, author, description, window) {
       list.push(t("errWindowWidth"));
     if (!Number.isFinite(window.height) || window.height < 360 || window.height > 2160)
       list.push(t("errWindowHeight"));
+  }
+  // The window block (and therefore the "window" permission) is needed as soon as
+  // any window preference is written, including a window icon added by hand.
+  // 창 설정이 하나라도 기록되면(사용자가 직접 추가한 창 아이콘 포함) window 블록과
+  // "window" 권한이 함께 필요하다.
+  if (window.customized || window.icon) {
     if (!permissions().includes("window")) list.push(t("errWindowPermission"));
   }
   for (const path of files.keys()) {
@@ -621,6 +671,7 @@ async function build() {
     title: $("window-title").value.trim(),
     width: Number.parseInt($("window-width").value, 10),
     height: Number.parseInt($("window-height").value, 10),
+    icon: files.has(WINDOW_ICON_PATH),
     tray: $("window-tray").checked,
   };
 
@@ -634,20 +685,23 @@ async function build() {
 
   const payload = new Map(files);
   if ($("auto-icon").checked) {
-    if (!payload.has("metadata/icon.png")) {
+    if (!payload.has(APP_ICON_PATH)) {
       const icon = await generatedIcon(name.charAt(0).toUpperCase() || "N");
-      payload.set("metadata/icon.png", icon);
+      payload.set(APP_ICON_PATH, icon);
     }
     if (!payload.has("metadata/preview.png")) {
-      payload.set("metadata/preview.png", payload.get("metadata/icon.png"));
+      payload.set("metadata/preview.png", payload.get(APP_ICON_PATH));
     }
   }
 
-  // OS notifications need 1.1.0; window title/size/tray need 1.3.0.
-  // OS 알림은 1.1.0, 창 제목/크기/트레이는 1.3.0 이상 런타임이 필요하다.
-  const minimumRuntime = window.customized
-    ? "1.3.0"
-    : permissions().includes("notifications") ? "1.1.0" : "1.0.0";
+  // OS notifications need 1.1.0; window title/size/tray need 1.3.0; a custom
+  // window icon needs 1.4.0.
+  // OS 알림은 1.1.0, 창 제목/크기/트레이는 1.3.0, 창 아이콘은 1.4.0 이상 런타임이 필요하다.
+  const minimumRuntime = window.icon
+    ? "1.4.0"
+    : window.customized
+      ? "1.3.0"
+      : permissions().includes("notifications") ? "1.1.0" : "1.0.0";
 
   const manifest = {
     format: "IPKG",
@@ -658,15 +712,21 @@ async function build() {
     entry,
     platforms: ["windows-x64", "linux-x64"],
     permissions: permissions(),
-    metadata: { icon: "metadata/icon.png", preview: "metadata/preview.png" },
+    metadata: { icon: APP_ICON_PATH, preview: "metadata/preview.png" },
   };
 
-  if (window.customized) {
+  if (window.customized || window.icon) {
     const block = {};
-    if (window.title) block.title = window.title;
-    block.width = window.width;
-    block.height = window.height;
-    if (window.tray) block.tray = true;
+    // Size/title/tray are only written once the user actually changed them; the
+    // icon is written whenever the package carries one.
+    // 제목/크기/트레이는 사용자가 실제로 바꿨을 때만, 아이콘은 패키지에 있으면 언제나 기록한다.
+    if (window.customized) {
+      if (window.title) block.title = window.title;
+      block.width = window.width;
+      block.height = window.height;
+      if (window.tray) block.tray = true;
+    }
+    if (window.icon) block.icon = WINDOW_ICON_PATH;
     manifest.window = block;
   }
 
@@ -1150,7 +1210,23 @@ function init() {
     if (file) useIconFile(file);
   });
   $("clear-icon").addEventListener("click", () => {
-    files.delete("metadata/icon.png");
+    files.delete(APP_ICON_PATH);
+    render();
+  });
+
+  // Window icon picker: any readable image becomes metadata/window-icon.png.
+  // 창 아이콘 선택: 읽을 수 있는 이미지를 metadata/window-icon.png 로 만든다.
+  $("pick-window-icon").addEventListener("click", () => $("window-icon-input").click());
+  $("window-icon-input").addEventListener("change", (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (file) {
+      markWindowCustomized();
+      useWindowIconFile(file);
+    }
+  });
+  $("clear-window-icon").addEventListener("click", () => {
+    files.delete(WINDOW_ICON_PATH);
     render();
   });
 

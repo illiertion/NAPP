@@ -43,6 +43,14 @@ target_link_libraries(napp-runtime-host PRIVATE
     libcef_dll_wrapper
 )
 napp_apply_warnings(napp-runtime-host)
+# Same identity as the launcher: the staged runtime carries the NAPP icon and the
+# real version in Explorer's file properties.
+napp_add_version_resource(napp-runtime-host
+    PRODUCT "NAPP"
+    DESCRIPTION "NAPP Web Runtime host"
+    ORIGINAL_FILENAME "napp-runtime-host.exe"
+    ICON "${PROJECT_SOURCE_DIR}/launcher/assets/napp.ico"
+    EXECUTABLE)
 # CEF headers pull in <windows.h>; NOMINMAX keeps std::min/max usable.
 target_compile_definitions(napp-runtime-host PRIVATE
     NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE

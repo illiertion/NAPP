@@ -1,47 +1,181 @@
 # NAPP Launcher
 
-수정본 적용 방법: 이 zip을 기존 프로젝트 위에 덮어쓰기 (`third_party/cef`, `third_party/miniz`는 기존 것 그대로 사용).
+**NAPP** — ILLIERTION cross-platform web application platform.
 
-# NAPP Launcher — 수정 내역 (Changes)
+웹 앱을 `.ipkg` 패키지로 묶어 배포하고, 각 OS 에서 네이티브 앱처럼 설치·실행하는
+플랫폼입니다. 런처(Qt 6)와 웹 런타임 호스트(Chromium Embedded Framework)로
+구성되어 있으며, 앱은 샌드박스 안에서 실행되고 권한은 설치 때 사용자가 승인합니다.
 
-> 빌드/실행은 직접 해보지 못했어(이 환경에 Qt/CEF가 없음). 컴파일 시 시그니처 오류가 나면 아래 "확인할 곳" 참고.
+| | |
+| --- | --- |
+| **런처** | 스토어 · 내 앱 · 런타임 관리 · 설정 (Qt 6 / QML) |
+| **런타임** | 앱마다 독립 프로세스 + 독립 프로필 (CEF 158) |
+| **패키지** | `.ipkg` — 매니페스트 + 앱 파일 + 아이콘 (재현 가능한 ZIP) |
+| **저장소** | 정적 호스팅 JSON 인덱스 (`raw.githubusercontent.com`) |
+| **SDK** | `window.napp` 주입 + `napp://` 호스트 라우트 |
 
-## 1. 창 버그 / 화면 안 맞음
-- **CEF 호스트 리사이즈**: 자식 브라우저 HWND를 안 움직여서 창 크기를 바꿔도 페이지가 그대로였음 → `SetWindowPos`로 물리 픽셀 크기에 맞춤, 모니터 배율 바뀔 때도 반영 (`host_window.cpp`).
-- **창 닫기**: 브라우저가 살아있는데 Qt가 창을 파괴해서 멈추거나 크래시 → 창 숨기고 CEF 종료 완료 후 종료, 4초 타임아웃 안전장치.
-- **DPI**: Qt `PassThrough` 배율 정책(125%/150% 반올림 문제), CEF 초기 크기를 물리 픽셀로.
-- 런처/앱 창 크기: 마우스가 있는 화면 기준, 화면보다 커지지 않게 제한, 런처는 마지막 위치/크기 저장·복원(모니터 빠져도 화면 안으로).
-- 사이드바가 계속 "런타임 없음"으로 보이던 것: 스캔 끝나면 상태 갱신.
-- 숨겨진 오버레이가 레이아웃 공간 차지하던 것, 흰색 깜빡임 제거.
+현재 빌드·검증 대상은 **Windows 10/11 x64**입니다. macOS/Linux 는 코드상 지원하며
+패키지 레이아웃까지 생성됩니다.
 
-## 2. 실행이 오래 걸림
-- 앱 실행 때 `waitForStarted(5000)`, 종료 때 `waitForFinished(3000)`로 UI가 멈췄음 → 비동기로 변경.
-- 런처: 창 먼저 띄우고 스캔/런타임 등록/저장소 갱신은 나중에 (`deferredStart`).
-- 번들 런타임: 기존 런타임이 활성이면 새 호스트가 반영 안 되던 문제 → 더 높은 번들 버전 자동 등록·활성화. 런타임 버전 **1.3.0**(1.2.0의 CEF 158 내장 창 크래시 수정 + 매니페스트 창/트레이 + 폴더 선택 저장)으로 올림.
-- CEF 스위치 추가(확장/컴포넌트 업데이트/백그라운드 네트워크/동기화 등 비활성), 시작 시간 로그(`runtime.log`의 `startup:` 줄).
+---
 
-## 3. 스튜디오(IPKG Studio 1.3.0)
-- **앱 아이콘 선택**: 원하는 이미지를 고르면 512px 이하 PNG로 `metadata/icon.png` 에 들어가고, 런처 타일·바로가기가 그 아이콘을 쓴다(사용자가 런처에서 따로 고르지 않았을 때).
-- **앱 창 설정**: 창 제목, 시작 너비/높이, 트레이 아이콘 유지 → 매니페스트 `window` 블록. 값을 바꾸면 `window` 권한이 자동으로 켜지고 설치 때 시스템 대화상자로 승인받는다.
-- **저장 위치 선택**: `폴더 선택…` → OS 폴더 대화상자. 고른 폴더에만 `.ipkg` 를 쓰고, 기본값은 앱 데이터의 `downloads`.
-- 진입점은 추가한 파일 중 HTML 문서를 자동 제안.
-- 권한은 설치할 때 승인하고, 라이브러리 → ⋯ → 제거로 앱과 데이터를 지울 수 있다.
-- `.ipkg` 재빌드: `repository/packages/com.illiertion.ipkgstudio/1.3.0.ipkg` (release 폴더에도 복사).
+## 1. 빌드
 
-## 4. .ipkg 열면 런처에서 설치
-- 더블클릭 → 런처가 열리고(이미 실행 중이면 그 창으로 전달, 로컬 소켓 단일 인스턴스) 검증 → **시스템 대화상자**로 설치/권한 승인 → 설치. 설정에 "`.ipkg` 파일을 NAPP으로 열기" 토글.
-- 파일 연결: 런처 시작 시 자동 복구(HKCU), 설치/제거 스크립트에도 추가.
-- 스토어 설치/업데이트도 허용 안 한 권한이 있으면 설치 직후 묻는다(예전엔 조용히 전부 허용).
-- 설치 완료/실패, 권한 요청, 앱 비정상 종료는 **OS 알림**(트레이 토스트)으로도 표시.
+### 요구 사항
 
-## 5. Chromium UI 전부 차단
-팝업(`window.open`/`_blank`), 우클릭 메뉴, F12·Ctrl+Shift+I/J/C·Ctrl+U/P/S, JS `alert/confirm/prompt`(없으면 삼킴, `dialog` 권한 있으면 OS 대화상자), "페이지 나가기" 확인, 다운로드 저장 창(앱 `downloads` 폴더로 조용히 저장), 링크 미리보기 말풍선, 외부 사이트로 이동(`external-links` 권한 있을 때만 시스템 브라우저), 권한 말풍선.
-웹 `Notification`은 shim으로 OS 알림에 연결(`notifications` 권한 승인 앱만, 10초에 5개 제한, `window.napp.notify`도 가능).
+| 항목 | 버전 |
+| --- | --- |
+| Windows | 10 1809 이상 |
+| Qt | 6.5 이상 (검증: 6.12.0 `msvc2022_64`) |
+| 컴파일러 | MSVC 2022 이상 (C++20) |
+| CMake | 3.24 이상 (Ninja 권장) |
+| Python | 3.9 이상 (저장소·패키징 도구) |
+| CEF | `third_party/cef` (binary distribution, `scripts/fetch-cef.bat`) |
 
-## 참고 / 한계
-- 권한 승인은 "토스트 버튼"이 아니라 **항상 위에 뜨는 OS 대화상자 + 토스트 알림** 조합이야. 버튼 달린 진짜 토스트는 WinRT 연동이 필요해서 뺐어.
-- `third_party/`(cef, miniz)는 zip에 넣지 않았어. 기존 폴더 그대로 쓰면 돼.
-- 반영 순서: 런처+호스트 다시 빌드 → `scripts/make-dist.ps1` → 새 런타임 1.1.0이 자동 등록됨. 앱은 한 번 껐다 켜야 새 호스트로 뜸.
+### 절차
 
-## 확인할 곳 (컴파일 에러 시)
-- `host_client.h`: CEF 158 기준 `OnBeforePopup`(popup_id 포함), `OnBeforeDownload`(bool 반환), `OnJSDialog` 시그니처 → `include/cef_*_handler.h`와 대조.
+```bat
+:: CEF 바이너리가 없으면 먼저 받아 둔다
+scripts\fetch-cef.bat
+
+:: 런타임 호스트 없이 런처만 (개발용)
+scripts\build.bat Release --test
+
+:: Chromium 런타임 포함 (배포용)
+scripts\build-cef.bat --test --dist
+```
+
+산출물:
+
+| 경로 | 내용 |
+| --- | --- |
+| `build/cef/NAPP.exe` | 런처 |
+| `build/cef/runtime-stage/` | 배포 가능한 웹 런타임 디렉터리 |
+| `dist/NAPP-<version>-Setup.exe` | 단일 파일 설치 프로그램 (설치 / 포터블) |
+| `dist/NAPP-<version>-portable.zip` | 포터블 압축 |
+
+---
+
+## 2. 배포
+
+```powershell
+# 설치 프로그램 + 포터블 zip
+scripts\make-dist.ps1
+
+# GitHub 에 올릴 저장소 트리 + .ipkg 모음
+scripts\make-release.ps1
+```
+
+`make-release.ps1` 결과:
+
+- `release/repository/` — `NAPP-Repository` 저장소에 그대로 올릴 트리
+- `release/apps/<appId>/*.ipkg` — 릴리스에 첨부할 패키지
+
+설치 프로그램은 사용자 범위로 설치하므로 관리자 권한이 필요 없습니다.
+`NAPP-Setup.exe --install "D:\Apps\NAPP" --quiet` 로 무인 설치할 수 있습니다.
+
+---
+
+## 3. IPKG 저장소
+
+저장소는 파일 몇 개로 이루어진 **정적 호스팅**입니다. 서버가 없습니다.
+
+```
+repository/
+├── repository.json        # 인덱스 (build_repository.py 가 생성)
+├── repository-meta.json   # 저장소 이름·소유자·홈페이지
+├── apps-src/<appId>/      # 앱 원본 (manifest.json, app/, metadata/, publish.json)
+├── apps/<appId>.json      # NAPP-APP 문서 (다운로드 URL + SHA-256)
+├── packages/<appId>/<version>.ipkg
+├── icons/<appId>.png
+├── categories/categories.json
+└── scripts/build_repository.py
+```
+
+앱을 추가하거나 갱신하려면 `apps-src/` 를 고치고 인덱스를 다시 만듭니다.
+
+```bash
+python repository/scripts/build_repository.py
+python repository/scripts/build_repository.py --base-url https://raw.githubusercontent.com/<owner>/<repo>/main/
+```
+
+런처는 첫 시작 시 `NAPP_OFFICIAL_REPOSITORY_URL` 에 지정된 저장소를 등록합니다.
+다른 저장소를 쓰려면 빌드 때 바꾸거나, 런처 설정에서 직접 추가하세요.
+
+```bat
+cmake -DNAPP_OFFICIAL_REPOSITORY_URL=https://raw.githubusercontent.com/<owner>/<repo>/main/ ...
+```
+
+---
+
+## 4. 앱 패키지 (.ipkg)
+
+규격은 [`specifications/IPKG_SPECIFICATION.md`](specifications/IPKG_SPECIFICATION.md),
+JSON 스키마는 [`specifications/schemas/`](specifications/schemas/) 를 따릅니다.
+
+매니페스트에서 창을 꾸밀 수 있습니다. 모두 선택 사항이며 `window` 권한이 필요합니다.
+
+```json
+"permissions": ["window"],
+"window": {
+  "title": "내 앱",
+  "width": 1100,
+  "height": 760,
+  "icon": "metadata/window-icon.png",
+  "tray": true
+}
+```
+
+- `icon` — 창, 작업 표시줄 단추, Alt+Tab, 트레이 아이콘에 쓰이는 이미지입니다.
+  PNG 또는 WebP, 256px 이상 권장. 없으면 NAPP 기본 아이콘을 씁니다.
+  런타임 1.4.0 이상이 필요합니다.
+- `metadata.icon` — 스토어 타일·바로가기용 아이콘입니다. `window.icon` 과 다를 수
+  있습니다.
+
+앱을 만들 때는 **IPKG Studio**(`com.illiertion.ipkgstudio`)를 쓰면 됩니다. 앱 아이콘,
+창 아이콘, 창 제목·크기·트레이를 고르고 파일을 넣으면 `.ipkg` 를 만들어 줍니다.
+
+---
+
+## 5. 플랫폼 전용 앱으로 패키징
+
+`.ipkg` 는 웹 앱이지만, 배포물은 각 OS 가 기대하는 모습으로 만들 수 있습니다.
+
+```bash
+python scripts/pack_app.py path/to/app.ipkg                    # 이 OS 용
+python scripts/pack_app.py app.ipkg --platform windows-x64 --installer
+python scripts/pack_app.py app.ipkg --platform all
+```
+
+| 플랫폼 | 결과물 |
+| --- | --- |
+| `windows-x64` | 앱 아이콘을 단 `<Name>.exe` 네이티브 스텁, `.ipkg`, `install.ps1` / `uninstall.ps1`, `README.txt`. `--installer` 를 주면 시작 메뉴·바탕 화면 바로가기와 제거 항목까지 만드는 단일 파일 `Setup.exe` |
+| `macos-arm64` | `<Name>.app` 번들 (`Info.plist`, `AppRun`, `.icns`) |
+| `linux-x64` | `AppDir` (`AppRun`, `.desktop`, 아이콘) + `install.sh` / `uninstall.sh`. `appimagetool` 로 `.AppImage` 를 만들 수 있게 되어 있습니다 |
+
+결과물은 `dist-apps/` 에 플랫폼별 폴더와 `.zip` 로 나옵니다.
+
+스텁은 NAPP 을 찾아(`NAPP_HOME` → 설치 등록 정보 → 옆 폴더) 동봉한 `.ipkg` 를
+설치하고 `NAPP --run-app <id>` 로 넘깁니다. **브라우저를 동봉하지 않습니다.**
+대상 기계에 NAPP 이 있으면 됩니다. 그래서 다운로드가 작고, 앱은 NAPP 런타임이 있는
+어디서든 그대로 동작합니다.
+
+---
+
+## 6. 저장소
+
+| | |
+| --- | --- |
+| 소스 | https://github.com/ILLIERTION/NAPP |
+| 앱 저장소 | https://github.com/ILLIERTION/NAPP-Repository |
+| 규격 | [`specifications/IPKG_SPECIFICATION.md`](specifications/IPKG_SPECIFICATION.md) |
+| 아키텍처 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| 사용법 | [`docs/USAGE.md`](docs/USAGE.md) |
+| 변경 이력 | [`CHANGELOG.md`](CHANGELOG.md) |
+
+---
+
+## 7. 라이선스
+
+MIT. 서드파티: Qt (LGPL/commercial), Chromium Embedded Framework (BSD-3-Clause),
+miniz (MIT). 자세한 내용은 각 `third_party/` 폴더를 보세요.

@@ -32,7 +32,9 @@ int main(int argc, char* argv[])
 
     QApplication application(argc, argv);
     QApplication::setApplicationName(QStringLiteral("NAPP"));
-    QApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    // Same value as the Windows version resource, generated from PROJECT_VERSION.
+    // Windows 버전 리소스와 같은 값. PROJECT_VERSION 에서 생성된다.
+    QApplication::setApplicationVersion(QStringLiteral(NAPP_VERSION_STRING));
     QApplication::setOrganizationName(QStringLiteral("ILLIERTION"));
     QApplication::setOrganizationDomain(QStringLiteral("illiertion.com"));
 
