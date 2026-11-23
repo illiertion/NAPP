@@ -60,12 +60,31 @@ HostWindow::HostWindow(HostOptions options, QWidget* parent)
     setMinimumSize(std::min(360, available.width()), std::min(300, available.height()));
     move(available.center() - QPoint(width / 2, height / 2));
 
-    // Same NAPP mark as the launcher/taskbar icon; the runtime stage ships it
-    // next to the host executable.
-    const QString iconPath = QDir(QCoreApplication::applicationDirPath())
-                                 .filePath(QStringLiteral("napp.ico"));
-    if (QFileInfo::exists(iconPath))
-        setWindowIcon(QIcon(iconPath));
+    // The window/taskbar/tray icon. A package may ship its own image through the
+    // manifest's `window.icon`; anything missing or undecodable falls back to the
+    // NAPP mark the runtime stage keeps next to the host executable.
+    // 창/작업 표시줄/트레이 아이콘. 매니페스트 `window.icon` 으로 앱이 고유 아이콘을
+    // 지정할 수 있고, 없거나 디코딩에 실패하면 호스트 옆의 NAPP 아이콘으로 대체한다.
+    QIcon icon;
+    if (!m_options.windowIcon.isEmpty()) {
+        icon = QIcon(m_options.windowIcon);
+        if (icon.isNull()) {
+            qWarning("window icon could not be decoded, using the NAPP icon: %s",
+                     qPrintable(m_options.windowIcon));
+        } else {
+            qInfo("window icon: %s", qPrintable(m_options.windowIcon));
+        }
+    }
+    if (icon.isNull()) {
+        const QString fallback = QDir(QCoreApplication::applicationDirPath())
+                                     .filePath(QStringLiteral("napp.ico"));
+        if (QFileInfo::exists(fallback))
+            icon = QIcon(fallback);
+    }
+    if (!icon.isNull()) {
+        setWindowIcon(icon);
+        m_windowIcon = icon;  // applied to the window class once the HWND exists
+    }
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
@@ -223,6 +242,89 @@ void HostWindow::start()
     }
 }
 
+#if defined(Q_OS_WIN)
+namespace {
+
+// Qt ships no public QPixmap -> HICON conversion, and the window *class* icon is
+// what the shell uses for the taskbar group and the system menu. Build one from
+// the ARGB pixmap so an app's own window.icon shows up everywhere.
+// Qt 에는 공개된 QPixmap -> HICON 변환이 없고, 창 "클래스" 아이콘이 작업 표시줄
+// 그룹과 시스템 메뉴에 쓰인다. ARGB 픽셀맵으로 직접 만들어 앱 아이콘이 어디서든
+// 보이게 한다.
+HICON createHIcon(const QPixmap& pixmap)
+{
+    const QImage image = pixmap.toImage().convertToFormat(QImage::Format_ARGB32);
+    if (image.isNull())
+        return nullptr;
+
+    BITMAPV5HEADER header{};
+    header.bV5Size = sizeof(header);
+    header.bV5Width = image.width();
+    header.bV5Height = -image.height();  // negative = top-down rows
+    header.bV5Planes = 1;
+    header.bV5BitCount = 32;
+    header.bV5Compression = BI_RGB;
+
+    void* bits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(screen, reinterpret_cast<BITMAPINFO*>(&header),
+                                     DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!color || !bits) {
+        if (color)
+            DeleteObject(color);
+        return nullptr;
+    }
+    const int stride = image.width() * 4;
+    for (int row = 0; row < image.height(); ++row)
+        memcpy(static_cast<char*>(bits) + row * stride, image.constScanLine(row),
+               size_t(stride));
+
+    // With a 32bpp colour bitmap Windows reads per-pixel alpha and only needs the
+    // mask to exist. // 32bpp 색상 비트맵이면 픽셀 알파를 쓰므로 마스크는 존재만 하면 된다.
+    HBITMAP mask = CreateBitmap(image.width(), image.height(), 1, 1, nullptr);
+
+    ICONINFO info{};
+    info.fIcon = TRUE;
+    info.hbmColor = color;
+    info.hbmMask = mask ? mask : color;
+    HICON icon = CreateIconIndirect(&info);
+
+    DeleteObject(color);
+    if (mask)
+        DeleteObject(mask);
+    return icon;
+}
+
+} // namespace
+#endif
+
+// Replaces the window class icon as well as the window icon: Qt's setWindowIcon()
+// only sends WM_SETICON, so Alt+Tab and the taskbar group still showed the generic
+// host icon for apps that ship their own. The HICONs are kept for the lifetime of
+// the process, which is exactly how long the window lives.
+// 창 클래스 아이콘도 함께 바꾼다. Qt 의 setWindowIcon() 은 WM_SETICON 만 보내므로,
+// 앱이 아이콘을 지정해도 Alt+Tab 과 작업 표시줄 그룹에는 호스트 아이콘이 남았다.
+// HICON 은 프로세스 수명 동안 유지하며 창도 그 동안만 살아 있다.
+void HostWindow::applyWindowIcon(const QIcon& icon)
+{
+#if defined(Q_OS_WIN)
+    const HWND hwnd = reinterpret_cast<HWND>(winId());
+    if (!hwnd)
+        return;
+    if (HICON large = createHIcon(icon.pixmap(32, 32))) {
+        SetClassLongPtr(hwnd, GCLP_HICON, reinterpret_cast<LONG_PTR>(large));
+        SendMessage(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(large));
+    }
+    if (HICON small = createHIcon(icon.pixmap(16, 16))) {
+        SetClassLongPtr(hwnd, GCLP_HICONSM, reinterpret_cast<LONG_PTR>(small));
+        SendMessage(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(small));
+    }
+#else
+    Q_UNUSED(icon);
+#endif
+}
+
 void HostWindow::resizeBrowser()
 {
     if (!m_client)
@@ -285,6 +387,14 @@ void HostWindow::showEvent(QShowEvent* event)
         m_screenHooked = true;
         connect(windowHandle(), &QWindow::screenChanged, this,
                 [this] { QTimer::singleShot(0, this, [this] { resizeBrowser(); }); });
+    }
+    // The HWND exists now, so the window class icon can be swapped in. Without
+    // this Alt+Tab and the taskbar group keep showing the generic host icon.
+    // 이제 HWND 가 생겼으므로 창 클래스 아이콘을 바꿀 수 있다. 없으면 Alt+Tab 과
+    // 작업 표시줄 그룹에 계속 호스트 기본 아이콘이 남는다.
+    if (!m_iconApplied && !m_windowIcon.isNull()) {
+        m_iconApplied = true;
+        applyWindowIcon(m_windowIcon);
     }
     resizeBrowser();
 }

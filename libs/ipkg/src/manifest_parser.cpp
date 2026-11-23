@@ -65,6 +65,25 @@ Result<void> requireHttpsUrl(const QString& value, const QString& context)
     return Result<void>::ok();
 }
 
+// A path spelled out inside the manifest is a schema-level value. An unsafe or
+// malformed one is therefore a manifest error (E1005), not an archive error
+// (E1010), even though both go through the same entry-name rules — E1010 is
+// reserved for entries the ZIP actually contains (IPKG_SPECIFICATION.md §6).
+// 매니페스트 안에 적힌 경로는 스키마 값이다. 규칙을 어기면 아카이브 오류(E1010)가
+// 아니라 매니페스트 오류(E1005)로 보고한다. 엔트리 이름 규칙은 같은 것을 쓰되,
+// E1010 은 ZIP 이 실제로 담은 엔트리에만 남겨 둔다 (규격 §6).
+Result<void> validateManifestPath(const QString& value, const QString& context)
+{
+    auto rules = paths::validateEntryName(value, false);
+    if (!rules) {
+        return Result<void>::fail(
+            ErrorCode::ManifestSchema,
+            QStringLiteral("%1 경로 규칙 위반: %2 (%3)")
+                .arg(context, value, rules.error().message));
+    }
+    return Result<void>::ok();
+}
+
 Result<QStringList> requireStringArray(const QJsonObject& object, const QString& key, const QString& context)
 {
     const QJsonValue value = object.value(key);
@@ -244,9 +263,9 @@ Result<Manifest> ManifestParser::parse(const QByteArray& json, const QString& or
         return Result<Manifest>::fail(ErrorCode::ManifestSchema,
                                       QStringLiteral("entry 는 app/ 하위여야 합니다: %1").arg(manifest.entry));
     }
-    auto entryRules = paths::validateEntryName(manifest.entry, false);
-    if (!entryRules)
-        return entryRules.error();
+    auto entryPath = validateManifestPath(manifest.entry, QStringLiteral("entry"));
+    if (!entryPath)
+        return entryPath.error();
 
     auto platforms = requireStringArray(root, QStringLiteral("platforms"), QStringLiteral("manifest"));
     if (!platforms)
@@ -284,7 +303,8 @@ Result<Manifest> ManifestParser::parse(const QByteArray& json, const QString& or
         for (auto it = window.constBegin(); it != window.constEnd(); ++it) {
             const QString key = it.key();
             if (key != QStringLiteral("title") && key != QStringLiteral("width")
-                && key != QStringLiteral("height") && key != QStringLiteral("tray")) {
+                && key != QStringLiteral("height") && key != QStringLiteral("icon")
+                && key != QStringLiteral("tray")) {
                 return Result<Manifest>::fail(ErrorCode::ManifestSchema,
                                               QStringLiteral("알 수 없는 window 필드: %1").arg(key));
             }
@@ -320,6 +340,19 @@ Result<Manifest> ManifestParser::parse(const QByteArray& json, const QString& or
             manifest.windowHeight = height.toInt();
         }
 
+        if (window.contains(QStringLiteral("icon"))) {
+            auto icon = requireString(window, QStringLiteral("icon"), 3, 512, QStringLiteral("window"));
+            if (!icon)
+                return icon.error();
+            // The icon is drawn by the host itself, so unlike an entry file it must
+            // stay inside the package root as a plain relative path.
+            // 아이콘은 호스트가 직접 그리므로 진입점과 같이 패키지 루트 안의 상대 경로여야 한다.
+            auto iconRules = validateManifestPath(icon.value(), QStringLiteral("window.icon"));
+            if (!iconRules)
+                return iconRules.error();
+            manifest.windowIconPath = icon.value();
+        }
+
         if (window.contains(QStringLiteral("tray"))) {
             const QJsonValue tray = window.value(QStringLiteral("tray"));
             if (!tray.isBool()) {
@@ -346,7 +379,7 @@ Result<Manifest> ManifestParser::parse(const QByteArray& json, const QString& or
     auto icon = requireString(metadata, QStringLiteral("icon"), 3, 512, QStringLiteral("metadata"));
     if (!icon)
         return icon.error();
-    auto iconRules = paths::validateEntryName(icon.value(), false);
+    auto iconRules = validateManifestPath(icon.value(), QStringLiteral("metadata.icon"));
     if (!iconRules)
         return iconRules.error();
     manifest.iconPath = icon.value();
@@ -354,7 +387,7 @@ Result<Manifest> ManifestParser::parse(const QByteArray& json, const QString& or
     auto preview = requireString(metadata, QStringLiteral("preview"), 3, 512, QStringLiteral("metadata"));
     if (!preview)
         return preview.error();
-    auto previewRules = paths::validateEntryName(preview.value(), false);
+    auto previewRules = validateManifestPath(preview.value(), QStringLiteral("metadata.preview"));
     if (!previewRules)
         return previewRules.error();
     manifest.previewPath = preview.value();
@@ -367,7 +400,7 @@ Result<Manifest> ManifestParser::parse(const QByteArray& json, const QString& or
         if (screenshots.value().size() > 8)
             return Result<Manifest>::fail(ErrorCode::ManifestSchema, QStringLiteral("screenshots 는 최대 8개입니다"));
         for (const QString& screenshot : screenshots.value()) {
-            auto rules = paths::validateEntryName(screenshot, false);
+            auto rules = validateManifestPath(screenshot, QStringLiteral("metadata.screenshots"));
             if (!rules)
                 return rules.error();
         }

@@ -163,6 +163,27 @@ def main() -> None:
     entries.append((info("app/new-feature.txt"), b"1.1.0"))
     write("valid-1.1.0.ipkg", entries)
 
+    # Full window block, including a custom window icon.
+    windowed = json.loads(json.dumps(MANIFEST))
+    windowed["permissions"] = ["storage", "window"]
+    windowed["window"] = {
+        "title": "Fixture Window",
+        "width": 1024,
+        "height": 720,
+        "icon": "metadata/window-icon.png",
+        "tray": True,
+    }
+    entries = basic_entries(manifest=json.dumps(windowed).encode())
+    entries.append((info("metadata/window-icon.png"), ICON))
+    write("window.ipkg", entries)
+
+    # window.icon declared but absent from the archive -> E1019.
+    dangling = json.loads(json.dumps(MANIFEST))
+    dangling["permissions"] = ["storage", "window"]
+    dangling["window"] = {"icon": "metadata/window-icon.png"}
+    entries = basic_entries(manifest=json.dumps(dangling).encode())
+    write("window-missing-icon.ipkg", entries)
+
 
 if __name__ == "__main__":
     main()

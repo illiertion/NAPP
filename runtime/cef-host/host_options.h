@@ -21,6 +21,10 @@ struct HostOptions
     QString windowTitle;
     int windowWidth = 0;
     int windowHeight = 0;
+    // Absolute path to the image the window/taskbar/tray icon is drawn from.
+    // Empty = the napp.ico shipped next to the host.
+    // 창·작업 표시줄·트레이 아이콘으로 쓸 이미지의 절대 경로. 비어 있으면 호스트 옆의 napp.ico 를 쓴다.
+    QString windowIcon;
     bool tray = false;
 
     // Launcher environment handed to the page (window.napp). Kept in sync with

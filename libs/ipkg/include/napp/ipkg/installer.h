@@ -34,6 +34,7 @@ struct InstalledPackage
     QString windowTitle;
     int windowWidth = 0;
     int windowHeight = 0;
+    QString windowIconRelPath;  // empty = the runtime's own NAPP icon
     bool windowTray = false;
 };
 

@@ -3,6 +3,7 @@
 #include "host_client.h"
 #include "host_options.h"
 
+#include <QIcon>
 #include <QMainWindow>
 
 class QLabel;
@@ -37,6 +38,10 @@ protected:
 private:
     void resizeBrowser();
     void forceQuit();
+    // Pushes the app icon into the window class (Alt+Tab, taskbar group, system
+    // menu). Windows only; a no-op elsewhere.
+    // 앱 아이콘을 창 클래스(Alt+Tab, 작업 표시줄 그룹, 시스템 메뉴)에 반영한다.
+    void applyWindowIcon(const QIcon& icon);
     // Builds the tray icon and, when the manifest asked for one, keeps it in the
     // notification area with Open / Quit. Requires the "window" permission.
     // 트레이 아이콘을 만들고, 매니페스트가 원하면 열기/종료 메뉴와 함께 상주시킨다.
@@ -45,6 +50,8 @@ private:
     void restoreWindow();
 
     HostOptions m_options;
+    QIcon m_windowIcon;       // resolved app icon (window/taskbar/tray)
+    bool m_iconApplied = false;
     QWidget* m_container = nullptr;
     QLabel* m_overlay = nullptr;
     QSystemTrayIcon* m_tray = nullptr;

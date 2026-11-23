@@ -94,6 +94,8 @@ HostOptions parseOptions(int argc, char** argv)
             QString value;
             next(value);
             options.windowHeight = value.toInt();
+        } else if (argument == QStringLiteral("--window-icon")) {
+            next(options.windowIcon);
         } else if (argument == QStringLiteral("--tray")) {
             QString value;
             next(value);

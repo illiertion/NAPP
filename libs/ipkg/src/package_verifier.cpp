@@ -86,6 +86,14 @@ Result<PackageInfo> PackageVerifier::verify(const QString& packagePath, const QS
         return Result<PackageInfo>::fail(ErrorCode::MetadataFileMissing,
                                          QStringLiteral("미리보기 파일이 패키지에 없습니다: %1").arg(manifest.value().previewPath));
     }
+    // window.icon is optional, but when declared it must exist in the package:
+    // the host draws it, so a missing file would silently fall back to the NAPP icon.
+    // window.icon 는 선택 사항이지만, 선언했으면 패키지에 있어야 한다.
+    // 호스트가 직접 그리는 이미지라 없으면 조용히 NAPP 기본 아이콘으로 넘어간다.
+    if (!manifest.value().windowIconPath.isEmpty() && !reader.find(manifest.value().windowIconPath)) {
+        return Result<PackageInfo>::fail(ErrorCode::MetadataFileMissing,
+                                         QStringLiteral("창 아이콘 파일이 패키지에 없습니다: %1").arg(manifest.value().windowIconPath));
+    }
     for (const QString& screenshot : manifest.value().screenshots) {
         if (!reader.find(screenshot)) {
             return Result<PackageInfo>::fail(ErrorCode::MetadataFileMissing,

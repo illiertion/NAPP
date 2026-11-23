@@ -28,13 +28,15 @@ struct Manifest
     QStringList platforms;
     QStringList permissions;
 
-    // Optional "window" block: the title, opening size and whether the runtime
-    // keeps a tray icon. Empty/0 means "use the runtime defaults".
-    // 선택 사항인 "window" 블록: 창 제목, 시작 크기, 트레이 아이콘 유지 여부.
-    // 비어 있거나 0 이면 런타임 기본값을 쓴다.
+    // Optional "window" block: the title, opening size, the window/taskbar/tray
+    // icon and whether the runtime keeps a tray icon. Empty/0 means "use the
+    // runtime defaults".
+    // 선택 사항인 "window" 블록: 창 제목, 시작 크기, 창/작업 표시줄/트레이 아이콘,
+    // 트레이 아이콘 유지 여부. 비어 있거나 0 이면 런타임 기본값을 쓴다.
     QString windowTitle;
     int windowWidth = 0;
     int windowHeight = 0;
+    QString windowIconPath;   // relative to the package root; empty = NAPP icon
     bool windowTray = false;
 
     QString iconPath;

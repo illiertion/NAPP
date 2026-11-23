@@ -84,7 +84,7 @@ Result<InstalledPackage> Installer::install(const InstallRequest& request)
         permissionsArray.append(permission);
     marker.insert(QStringLiteral("permissions"), permissionsArray);
     if (!manifest.windowTitle.isEmpty() || manifest.windowWidth > 0 || manifest.windowHeight > 0
-        || manifest.windowTray) {
+        || !manifest.windowIconPath.isEmpty() || manifest.windowTray) {
         QJsonObject window;
         if (!manifest.windowTitle.isEmpty())
             window.insert(QStringLiteral("title"), manifest.windowTitle);
@@ -92,6 +92,8 @@ Result<InstalledPackage> Installer::install(const InstallRequest& request)
             window.insert(QStringLiteral("width"), manifest.windowWidth);
         if (manifest.windowHeight > 0)
             window.insert(QStringLiteral("height"), manifest.windowHeight);
+        if (!manifest.windowIconPath.isEmpty())
+            window.insert(QStringLiteral("icon"), manifest.windowIconPath);
         window.insert(QStringLiteral("tray"), manifest.windowTray);
         marker.insert(QStringLiteral("window"), window);
     }
@@ -190,6 +192,7 @@ Result<InstalledPackage> Installer::describe(const QString& appId, const QString
         installed.windowWidth = window.value(QStringLiteral("width")).toInt();
         installed.windowHeight = window.value(QStringLiteral("height")).toInt();
         installed.windowTray = window.value(QStringLiteral("tray")).toBool();
+        installed.windowIconRelPath = window.value(QStringLiteral("icon")).toString();
     }
 
     // The manifest is the source of truth for anything the marker does not carry
@@ -214,7 +217,21 @@ Result<InstalledPackage> Installer::describe(const QString& appId, const QString
                 installed.windowHeight = manifest.value().windowHeight;
             if (!installed.windowTray)
                 installed.windowTray = manifest.value().windowTray;
+            if (installed.windowIconRelPath.isEmpty())
+                installed.windowIconRelPath = manifest.value().windowIconPath;
         }
+    }
+
+    // The host resolves the icon itself and falls back to napp.ico when it is
+    // missing, but an icon that is not on disk is a damaged install — drop it
+    // here so nothing downstream keeps a broken path.
+    // 호스트는 아이콘이 없으면 napp.ico 로 대체하지만, 디스크에 없는 아이콘은 손상된
+    // 설치이므로 여기서 버린다. 깨진 경로가 다음 단계로 넘어가지 않게 하기 위함이다.
+    if (!installed.windowIconRelPath.isEmpty()
+        && !QFileInfo::exists(QDir(directory).filePath(installed.windowIconRelPath))) {
+        qWarning("window icon missing from install, falling back to the NAPP icon: %s",
+                 qPrintable(installed.windowIconRelPath));
+        installed.windowIconRelPath.clear();
     }
 
     if (installed.entryRelPath.isEmpty())

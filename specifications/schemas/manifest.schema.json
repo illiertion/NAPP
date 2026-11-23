@@ -190,7 +190,7 @@
     },
     "window": {
       "type": "object",
-      "description": "선택 사항. 앱 창의 제목/시작 크기와 트레이 아이콘 사용 여부. 사용하려면 permissions 에 \"window\" 가 있어야 한다.",
+      "description": "선택 사항. 앱 창의 제목/시작 크기, 창 아이콘과 트레이 아이콘 사용 여부. 사용하려면 permissions 에 \"window\" 가 있어야 한다.",
       "additionalProperties": false,
       "properties": {
         "title": {
@@ -210,6 +210,10 @@
           "minimum": 360,
           "maximum": 2160,
           "description": "시작 창 높이(논리 픽셀). 화면 작업 영역보다 크면 그 영역에 맞춰 줄인다."
+        },
+        "icon": {
+          "$ref": "#/$defs/relative_path",
+          "description": "창·작업 표시줄·트레이 아이콘으로 쓸 이미지(패키지 내 상대 경로). PNG 또는 WebP, 256px 이상 권장. 지정하지 않거나 디코딩에 실패하면 NAPP 기본 아이콘을 쓴다. metadata.icon 과 달리 설치 후에도 앱이 고유한 창 아이콘을 갖는다."
         },
         "tray": {
           "type": "boolean",

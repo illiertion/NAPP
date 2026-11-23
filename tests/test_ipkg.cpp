@@ -60,6 +60,10 @@ private slots:
     void manifestRejectsUnknownTopLevelKey();
     void manifestRejectsEntryOutsideApp();
     void manifestRejectsNonHttpsHomepage();
+    void manifestParsesWindowBlock();
+    void manifestRejectsWindowWithoutPermission();
+    void manifestRejectsUnknownWindowKey();
+    void manifestRejectsUnsafeWindowIcon();
 
     void pathRulesRejectUnsafeNames_data();
     void pathRulesRejectUnsafeNames();
@@ -77,6 +81,8 @@ private slots:
     void brokenManifestRejected();
     void brokenIdRejected();
     void missingEntryFileRejected();
+    void windowIconIsInstalled();
+    void missingWindowIconRejected();
 
     void installsAndActivates();
     void installIsAtomicForExistingVersion();
@@ -148,6 +154,60 @@ void TestIpkg::manifestRejectsNonHttpsHomepage()
 {
     QByteArray bytes = validManifest();
     bytes.replace("\"license\": \"MIT\"", "\"license\": \"MIT\", \"homepage\": \"http://insecure.example\"");
+    const auto manifest = ManifestParser::parse(bytes);
+    QVERIFY(manifest.isError());
+    QCOMPARE(manifest.error().code, ErrorCode::ManifestSchema);
+}
+
+// window.icon is the image the runtime host draws for the window, the taskbar
+// button and the tray. It is optional, but when present it must be a plain
+// relative path inside the package.
+// window.icon 는 런타임 호스트가 창/작업 표시줄/트레이에 그릴 이미지다. 선택
+// 사항이지만, 있으면 패키지 안의 상대 경로여야 한다.
+void TestIpkg::manifestParsesWindowBlock()
+{
+    QByteArray bytes = validManifest();
+    bytes.replace("\"permissions\": [\"storage\"]",
+                  "\"permissions\": [\"storage\", \"window\"], "
+                  "\"window\": { \"title\": \"Fixture Window\", \"width\": 1024, "
+                  "\"height\": 720, \"icon\": \"metadata/window-icon.png\", \"tray\": true }");
+
+    const auto manifest = ManifestParser::parse(bytes);
+    QVERIFY2(manifest.isOk(), qPrintable(manifest.error().message));
+    QCOMPARE(manifest.value().windowTitle, QStringLiteral("Fixture Window"));
+    QCOMPARE(manifest.value().windowWidth, 1024);
+    QCOMPARE(manifest.value().windowHeight, 720);
+    QCOMPARE(manifest.value().windowIconPath, QStringLiteral("metadata/window-icon.png"));
+    QVERIFY(manifest.value().windowTray);
+}
+
+void TestIpkg::manifestRejectsWindowWithoutPermission()
+{
+    QByteArray bytes = validManifest();
+    bytes.replace("\"permissions\": [\"storage\"]",
+                  "\"permissions\": [\"storage\"], \"window\": { \"title\": \"Fixture Window\" }");
+    const auto manifest = ManifestParser::parse(bytes);
+    QVERIFY(manifest.isError());
+    QCOMPARE(manifest.error().code, ErrorCode::ManifestSchema);
+}
+
+void TestIpkg::manifestRejectsUnknownWindowKey()
+{
+    QByteArray bytes = validManifest();
+    bytes.replace("\"permissions\": [\"storage\"]",
+                  "\"permissions\": [\"storage\", \"window\"], "
+                  "\"window\": { \"icon\": \"metadata/icon.png\", \"opacity\": 0.5 }");
+    const auto manifest = ManifestParser::parse(bytes);
+    QVERIFY(manifest.isError());
+    QCOMPARE(manifest.error().code, ErrorCode::ManifestSchema);
+}
+
+void TestIpkg::manifestRejectsUnsafeWindowIcon()
+{
+    QByteArray bytes = validManifest();
+    bytes.replace("\"permissions\": [\"storage\"]",
+                  "\"permissions\": [\"storage\", \"window\"], "
+                  "\"window\": { \"icon\": \"../outside.png\" }");
     const auto manifest = ManifestParser::parse(bytes);
     QVERIFY(manifest.isError());
     QCOMPARE(manifest.error().code, ErrorCode::ManifestSchema);
@@ -271,6 +331,36 @@ void TestIpkg::missingEntryFileRejected()
 {
     PackageVerifier verifier;
     QCOMPARE(verifier.verify(fixture(QStringLiteral("noentry.ipkg"))).error().code, ErrorCode::EntryFileMissing);
+}
+
+void TestIpkg::windowIconIsInstalled()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    Installer installer(Paths::forRoot(QDir(root.path()).filePath(QStringLiteral("install"))));
+
+    InstallRequest request;
+    request.packagePath = fixture(QStringLiteral("window.ipkg"));
+    auto installed = installer.install(request);
+    QVERIFY2(installed.isOk(), qPrintable(installed.error().message));
+
+    QCOMPARE(installed.value().windowTitle, QStringLiteral("Fixture Window"));
+    QCOMPARE(installed.value().windowWidth, 1024);
+    QCOMPARE(installed.value().windowHeight, 720);
+    QVERIFY(installed.value().windowTray);
+    // The icon is surfaced as a path relative to the app root so the launcher can
+    // resolve it to an absolute path before handing it to the runtime host.
+    // 아이콘은 앱 루트 기준 상대 경로로 전달되고, 런처가 절대 경로로 바꿔 호스트에 넘긴다.
+    QCOMPARE(installed.value().windowIconRelPath, QStringLiteral("metadata/window-icon.png"));
+    QVERIFY(QFileInfo::exists(
+        QDir(installed.value().directory).filePath(installed.value().windowIconRelPath)));
+}
+
+void TestIpkg::missingWindowIconRejected()
+{
+    PackageVerifier verifier;
+    QCOMPARE(verifier.verify(fixture(QStringLiteral("window-missing-icon.ipkg"))).error().code,
+             ErrorCode::MetadataFileMissing);
 }
 
 void TestIpkg::installsAndActivates()

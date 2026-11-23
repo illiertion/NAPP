@@ -105,6 +105,21 @@ Result<void> AppLauncher::launch(const ipkg::InstalledPackage& package, const QS
             package.windowTray ? QStringLiteral("1") : QStringLiteral("0"),
         };
         arguments.append(windowArguments);
+
+        // The icon is resolved to an absolute path here: the host lives in the
+        // runtime directory and must not go looking for the app root itself.
+        // 아이콘은 여기서 절대 경로로 바꿔 넘긴다. 호스트는 런타임 디렉터리에 있으므로
+        // 앱 루트를 직접 찾게 하지 않는다.
+        if (!package.windowIconRelPath.isEmpty()) {
+            const QString iconFile =
+                QDir(package.directory).filePath(package.windowIconRelPath);
+            if (QFileInfo::exists(iconFile)) {
+                arguments.append({QStringLiteral("--window-icon"), iconFile});
+            } else {
+                qWarning("window icon not found for %s: %s", qPrintable(package.appId),
+                         qPrintable(iconFile));
+            }
+        }
     }
     process->setArguments(arguments);
 
