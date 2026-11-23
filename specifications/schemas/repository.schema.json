@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.illiertion.com/napp/1/repository.schema.json",
+  "title": "NAPP repository.json",
+  "description": "GitHub Raw 등 HTTPS로 제공되는 저장소 인덱스 파일의 schema_version 1 스키마.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schema_version", "repository", "apps"],
+  "$defs": {
+    "app_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z0-9][a-z0-9-]*){1,}$"
+    },
+    "relative_path": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*/\\.\\.?/)(?!^\\.\\.?(/|$))(?!.*/$).+$"
+    }
+  },
+  "properties": {
+    "format": {
+      "const": "NAPP-REPOSITORY"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "owner"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/app_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "homepage": {
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^https://"
+        }
+      }
+    },
+    "categories": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/relative_path"
+        },
+        {
+          "description": "categories.json의 저장소 루트 기준 상대 경로. 생략하면 categories.json을 사용하지 않는다."
+        }
+      ]
+    },
+    "apps": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "manifest"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/app_id"
+          },
+          "manifest": {
+            "$ref": "#/$defs/relative_path"
+          },
+          "category": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "maxLength": 40,
+            "description": "categories.json의 카테고리 id. 생략 시 앱 JSON의 app.category를 사용한다."
+          },
+          "featured": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  }
+}

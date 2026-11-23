@@ -1,0 +1,2 @@
+// Explorer/exe icon for NAPP.exe (the .ico carries 16-256px frames).
+IDI_ICON1 ICON DISCARDABLE "napp.ico"

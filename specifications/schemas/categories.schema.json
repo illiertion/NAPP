@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.illiertion.com/napp/1/categories.schema.json",
+  "title": "NAPP categories.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schema_version", "categories"],
+  "properties": {
+    "format": {
+      "const": "NAPP-CATEGORIES"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "categories": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "maxLength": 40
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  }
+}

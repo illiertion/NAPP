@@ -1,0 +1,28 @@
+# Normalise text files to LF in the repository; Windows checkouts get CRLF
+# through core.autocrlf. Keeps diffs stable across platforms.
+* text=auto
+
+*.sh      text eol=lf
+*.py      text eol=lf
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.ps1     text eol=crlf
+*.sln     text eol=crlf
+*.vcxproj text eol=crlf
+
+# Never touch binary payloads.
+*.png   binary
+*.webp  binary
+*.ico   binary
+*.ipkg  binary
+*.zip   binary
+*.exe   binary
+*.dll   binary
+*.lib   binary
+*.bin   binary
+*.dat   binary
+*.pak   binary
+*.icns  binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary

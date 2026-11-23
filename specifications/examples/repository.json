@@ -1,0 +1,23 @@
+{
+  "format": "NAPP-REPOSITORY",
+  "schema_version": 1,
+  "repository": {
+    "id": "com.illiertion.official",
+    "name": "ILLIERTION Official Repository",
+    "owner": "ILLIERTION"
+  },
+  "categories": "categories/categories.json",
+  "apps": [
+    {
+      "id": "com.illiertion.myapp",
+      "manifest": "apps/myapp.json",
+      "category": "tools",
+      "featured": false
+    },
+    {
+      "id": "com.illiertion.example",
+      "manifest": "apps/example.json",
+      "category": "utilities"
+    }
+  ]
+}

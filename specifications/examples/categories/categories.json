@@ -1,0 +1,11 @@
+{
+  "format": "NAPP-CATEGORIES",
+  "schema_version": 1,
+  "categories": [
+    { "id": "tools", "name": "Tools" },
+    { "id": "utilities", "name": "Utilities" },
+    { "id": "games", "name": "Games" },
+    { "id": "media", "name": "Media" },
+    { "id": "development", "name": "Development" }
+  ]
+}

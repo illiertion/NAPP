@@ -1,0 +1,31 @@
+{
+  "format": "IPKG",
+  "format_version": 1,
+  "app": {
+    "id": "com.illiertion.example",
+    "name": "Example App",
+    "version": "1.0.0",
+    "description": "Example NAPP application",
+    "author": "ILLIERTION",
+    "license": "MIT"
+  },
+  "runtime": {
+    "type": "chromium",
+    "minimum_version": "1.0.0"
+  },
+  "sdk": {
+    "minimum_version": "1.0.0"
+  },
+  "entry": "app/index.html",
+  "platforms": [
+    "windows-x64",
+    "linux-x64"
+  ],
+  "permissions": [
+    "storage"
+  ],
+  "metadata": {
+    "icon": "metadata/icon.png",
+    "preview": "metadata/preview.png"
+  }
+}

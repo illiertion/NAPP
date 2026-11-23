@@ -1,0 +1,20 @@
+set(NAPP_CORE_HEADERS
+    include/napp/core/error.h
+    include/napp/core/result.h
+    include/napp/core/semver.h
+    include/napp/core/paths.h
+    include/napp/core/platform.h
+    include/napp/core/logging.h
+    include/napp/core/json.h
+)
+
+napp_add_library(napp_core
+    SOURCES
+        src/error.cpp
+        src/semver.cpp
+        src/paths.cpp
+        src/platform.cpp
+        src/logging.cpp
+        src/json.cpp
+        ${NAPP_CORE_HEADERS}
+)
