@@ -29,12 +29,19 @@ if (-not (Test-Path (Join-Path $Repository 'repository.json'))) {
     throw "repository.json is missing; run repository\scripts\build_repository.py first"
 }
 
-if (Test-Path $Release) { Remove-Item $Release -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $Release | Out-Null
-
-# ---- repository tree (upload the contents of release/repository to GitHub)
+# release/repository doubles as the checkout that publishes ILLIERTION/NAPP-Repository,
+# so its .git directory has to survive a rebuild. Only the generated entries are
+# cleared; release/apps is disposable and is rebuilt from scratch.
+# release/repository 는 ILLIERTION/NAPP-Repository 를 올리는 작업 트리라서 다시
+# 만들어도 .git 은 남겨 둔다. 생성된 항목만 지우고, release/apps 는 처음부터 만든다.
 $repositoryTarget = Join-Path $Release 'repository'
-New-Item -ItemType Directory -Force -Path $repositoryTarget | Out-Null
+if (Test-Path $repositoryTarget) {
+    Get-ChildItem $repositoryTarget -Force |
+        Where-Object { $_.Name -ne '.git' } |
+        Remove-Item -Recurse -Force
+} else {
+    New-Item -ItemType Directory -Force -Path $repositoryTarget | Out-Null
+}
 $entries = @(
     'repository.json',
     'repository-meta.json',
@@ -57,6 +64,7 @@ foreach ($entry in $entries) {
 
 # ---- packaged apps, easy to grab without walking packages/
 $appsTarget = Join-Path $Release 'apps'
+if (Test-Path $appsTarget) { Remove-Item $appsTarget -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $appsTarget | Out-Null
 $packages = Join-Path $Repository 'packages'
 if (Test-Path $packages) {
